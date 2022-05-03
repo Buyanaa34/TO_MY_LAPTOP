@@ -1,0 +1,837 @@
+import React, { useEffect, useState } from "react";
+// import "./CardStyleFundamental.css";
+import { ReactComponent as LogoUnitel } from "../../@golomt/img/UnitelLogo.svg";
+// import { ReactComponent as LogoGolomt } from "@golomt/img/logo-large-mn.svg";
+import { ReactComponent as LogoShoppy } from "../../@golomt/img/ShoppyLogo.svg";
+import { ReactComponent as LogoGolomt } from "../../@golomt/img/logo-large-mn.svg";
+import VideoPopUp from "../../backups/VideoPopUp/VideoPopUp";
+import MuiAlert from "@mui/material/Alert";
+import Snackbar from "@mui/material/Snackbar";
+import { withRouter } from "react-router-dom";
+import axios from "axios";
+import Button from "@mui/material/Button";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogContentText from "@mui/material/DialogContentText";
+import DialogTitle from "@mui/material/DialogTitle";
+import { messagesMn } from "../../configs/Language/Lang.config";
+import { ReactComponent as TrustIcon } from "../../@golomt/img/trustIcon.svg";
+import { ReactComponent as CameraIcon } from "../../@golomt/img/cameraIcon.svg";
+import { ReactComponent as InfoIcon } from "../../@golomt/img/InfoIcon.svg";
+import CardDescription from "./CardDescription/CardDescription";
+import {
+  Grid,
+  makeStyles,
+  MenuItem,
+  Paper,
+  TextField,
+  Typography,
+} from "@material-ui/core";
+import clsx from "clsx";
+
+const Alert = React.forwardRef(function Alert(props, ref) {
+  return <MuiAlert elevation={6} ref={ref} variant="filled" {...props} />;
+});
+
+const useStyles = makeStyles((theme) => ({
+  root: {},
+  container: {
+    borderRadius: theme.spacing(2),
+    padding: theme.spacing(2),
+  },
+  logoSvg: {
+    width: "50%",
+    "& path": {
+      fill: theme.palette.primary.main,
+    },
+  },
+  logoBG: {
+    "&::before": {
+      content: '""',
+      background: "url(/images/transparent-logo.png) no-repeat",
+      width: "100%",
+      height: "100%",
+      // backgroundSize: "200%",
+      position: "absolute",
+      left: 0,
+      opacity: "0.2",
+      // backgroundPositionX: 100,
+      zIndex: -1,
+      [theme.breakpoints.down("sm")]: {
+        // backgroundSize: "100%",
+        backgroundPositionX: -100,
+      },
+    },
+  },
+}));
+
+const Card = (props) => {
+  const classes = useStyles();
+  useEffect(() => {
+    props.urlParam(props.whichcompany);
+    if (
+      window.location.href.indexOf("?state=") === -1 ||
+      window.location.href.indexOf("&scope=") === -1
+    ) {
+      setIsValidReq({
+        isCorrectReq: false,
+        wrongReqMsg: "URL must contain valid state and scope",
+      });
+    } else {
+      const merchants = ["unitel", "shoppy","golomt"];
+      let isCorrectMerch = false;
+      for (let i = 0; i < merchants.length; i++) {
+        if (merchants[i] === props.whichcompany) {
+          isCorrectMerch = true;
+        }
+      }
+      if (!isCorrectMerch) {
+        setIsValidReq({
+          isCorrectReq: false,
+          wrongReqMsg: "invalid merchant name",
+        });
+      }
+    }
+  }, []);
+  
+
+  let cvvValue = "";
+  let cardNumValue = "";
+  let keyCodeNum = "";
+  let deletedValue = "";
+  let expVal = "";
+
+  const queries = props.location.search
+    ? props.location.search.replace(/\?/g, "")
+    : "";
+  const queryValues = queries.split("&").map((query, index) => {
+    return { value: query.split("=")[1], name: query.split("=")[0] };
+  });
+
+  const [isVideoClicked, setVideoClicked] = useState(false);
+
+  const [errPopUpMsg, setErrPopUpMsg] = useState("");
+
+  const [cardDesc, setCardDesc] = useState({
+    show: false,
+    header: "",
+    body: "",
+  });
+
+  const [isValidReq, setIsValidReq] = useState({
+    isCorrectReq: true,
+    wrongReqMsg: "",
+  });
+
+  const { isCorrectReq, wrongReqMsg } = isValidReq;
+
+  const [state, setState] = useState({
+    open: false,
+    vertical: "top",
+    horizontal: "center",
+  });
+
+  const { vertical, horizontal, open } = state;
+
+  const [openDia, setOpenDia] = React.useState(false);
+
+  const handleClickOpen = () => {
+    setOpenDia(true);
+  };
+
+  const handleClosePop = () => {
+    setOpenDia(false);
+  };
+
+  const handleClose = () => {
+    setState({ ...state, open: false });
+  };
+
+  // let companyName = props.match.params.whichcompany;
+  let companyName = props.whichcompany;
+  companyName = companyName.charAt(0).toUpperCase() + companyName.slice(1);
+
+  let Logo = "";
+  if (companyName === "Unitel") {
+    // Logo = <LogoUnitel style={{ width: "50%" }} />;
+    Logo = null;
+  } else if (companyName === "Shoppy") {
+    Logo = <LogoShoppy></LogoShoppy>;
+  }
+  else if (companyName === "Golomt"){
+    Logo = <LogoGolomt className={clsx(classes.logoSvg)}></LogoGolomt>
+  }
+   else {
+    Logo = null;
+  }
+
+  const openCamera = () => {
+    setVideoClicked(true);
+  };
+
+  const closeCamera = (message) => {
+    // console.log(message);
+    if (message !== undefined) {
+      setState({ open: true, vertical: "top", horizontal: "center" });
+      if (message === "NotFoundError: Requested device not found") {
+        setErrPopUpMsg(messagesMn.camerErr);
+      } else {
+        setErrPopUpMsg("Камер нээх боломжгүй байна. Err: " + message);
+      }
+    }
+    setVideoClicked(false);
+  };
+
+  const orderClick = () => {
+    handleClosePop();
+    let cardNum = document.getElementById("cardNum");
+    let cvv = document.getElementById("cvv");
+    let cardHolderName = document.getElementById("cardHolderName");
+    let expiryDate = document.getElementById("expiryDate");
+
+    let myJsonString = validateValuesOnSubmit(
+      cardNum,
+      cvv,
+      cardHolderName,
+      expiryDate
+    );
+    if (myJsonString !== null) {
+      const config = {
+        headers: { "X-Golomt-Service": `GTMAC` },
+      };
+      axios
+        .post("/api/v1/card/mac", myJsonString, config)
+        .then((response) => {
+          let expDates = expiryDate.value.split("/");
+          let expireDate = expDates[1] + expDates[0];
+          if (response.data.mac !== "") {
+            const formInputs = [
+              {
+                name: "MPI_MAC",
+                value: response.data.mac,
+              },
+              {
+                name: "MPI_TRANS_TYPE",
+                value: "SALES",
+              },
+              {
+                name: "MPI_MERC_ID",
+                value: response.data.merchantId,
+              },
+              {
+                name: "MPI_PURCH_AMT",
+                //invoice дээр үүсгэсэн amount-оо 100-р үржүүүлж бичнэ.
+                value: "100",
+              },
+              {
+                name: "MPI_PURCH_CURR",
+                value: "496",
+              },
+              {
+                name: "MPI_TRXN_ID",
+                value: response.data.transactionId,
+              },
+              {
+                name: "MPI_PURCH_DATE",
+                value: response.data.purchaseDate,
+              },
+              {
+                name: "MPI_PAN",
+                value: cardNum.value.replace(/[-]/g, ""),
+              },
+              {
+                name: "MPI_PAN_EXP",
+                value: expireDate,
+              },
+              {
+                name: "MPI_CVV2",
+                value: cvv.value,
+              },
+              {
+                name: "MPI_CARD_HOLDER_NAME",
+                value: cardHolderName.value,
+              },
+            ];
+            const formData = document.getElementById("3DS_FORM");
+            formInputs.forEach((el) => {
+              let input = document.createElement("input");
+              input.style = "display:none;";
+              input.value = el.value;
+              input.name = el.name;
+              input.type = "text";
+              formData.appendChild(input);
+            });
+            document.getElementById("root").appendChild(formData);
+            formData.submit();
+          }
+        })
+        .catch(function (err) {
+          setState({ open: true, vertical: "top", horizontal: "center" });
+          if (
+            err.response.data.debugMessage ===
+            "card-tokenization.state.not.matched"
+          ) {
+            setErrPopUpMsg(
+              "Таны нэвтрэх эрхийн хугацаа дууссан/буруу/ байна. Дахин нэвтэрнэ үү !"
+            );
+          } else {
+            setErrPopUpMsg(err.response.data.debugMessage);
+          }
+        });
+    }
+  };
+
+  const validateValuesOnSubmit = (cardNum, cvv, cardHolderName, expiryDate) => {
+    if (
+      cardNum.value !== "" &&
+      cvv.value !== "" &&
+      cardHolderName.value !== "" &&
+      expiryDate.value !== ""
+    ) {
+      let expDates = expiryDate.value.split("/");
+      let expireDate = "20" + expDates[1] + expDates[0];
+      if (
+        cardNum.value.replace(/[-]/g, "").length === 16 &&
+        cvv.value.length >= 3
+      ) {
+        const myJsonString = {
+          cardID: cardNum.value.replace(/[-]/g, ""),
+          cvv: cvv.value,
+          expireDate: expireDate,
+          merchant: props.whichcompany,
+          cardHolderName: cardHolderName.value,
+          state: queryValues[0].value,
+          scope: queryValues[1].value,
+        };
+        return myJsonString;
+      } else {
+        setState({ open: true, vertical: "top", horizontal: "center" });
+        setErrPopUpMsg(
+          "Картын дугаар эсвэл cvv буруу/дутуу/ форматтай байгаа тул дахин шалгана уу"
+        );
+      }
+    } else {
+      if (cardNum.value === "") {
+        document.getElementById("cardError").style.display = "block";
+        cardNum.style.borderBottom = "2.75px solid red";
+      }
+      if (cvv.value === "") {
+        document.getElementById("cvvError").style.display = "block";
+        cvv.style.borderBottom = "2.75px solid red";
+      }
+      if (cardHolderName.value === "") {
+        document.getElementById("cardHolderError").style.display = "block";
+        cardHolderName.style.borderBottom = "2.75px solid red";
+      }
+      if (expiryDate.value === "") {
+        document.getElementById("expiryError").style.display = "block";
+        expiryDate.style.borderBottom = "2.75px solid red";
+      }
+      return null;
+    }
+  };
+
+  const keyPress = (e) => {
+    keyCodeNum = e.keyCode;
+    //backspace darahad ustgagdsan char-n value-g awj bn
+    if (keyCodeNum === 8) {
+      deletedValue = e.target.value[e.target.selectionStart - 1];
+    }
+    //delete button darahad ustgagdsan char-n value-g awj bn
+    if (keyCodeNum === 46) {
+      deletedValue = e.target.value[e.target.selectionStart];
+    }
+  };
+
+  const validateVal = (e) => {
+    const re = /^[0-9\b\-]+$/;
+    const reNotDash = /^[0-9\b]+$/;
+    const reExpiry = /^[0-9\b\/]+$/;
+
+    let arrayVal = e.target.value.split("");
+
+    if (e.target.getAttribute("errid") === "cvvError") {
+      //CVV
+      if (e.target.value === "" || reNotDash.test(e.target.value)) {
+        e.target.value.length <= 3
+          ? (cvvValue = e.target.value)
+          : (e.target.value = cvvValue);
+      } else {
+        e.target.value = cvvValue;
+      }
+    } else if (e.target.getAttribute("errid") === "expiryError") {
+      //Expiry
+      if (e.target.value === "" || reExpiry.test(e.target.value)) {
+        //forwardslash
+        if (keyCodeNum === 191 || keyCodeNum === 111) {
+          e.target.value = expVal;
+        }
+        //backspace
+        if (keyCodeNum === 8) {
+          if (deletedValue === "/") {
+            if (e.target.value[e.target.selectionStart] !== undefined) {
+              e.target.value = expVal;
+            }
+          }
+        }
+        //delete
+        if (keyCodeNum === 46) {
+          if (deletedValue === "/") {
+            if (e.target.value[e.target.selectionStart] !== undefined) {
+              e.target.value = expVal;
+            }
+          }
+        }
+        if (e.target.value.length <= 5) {
+          if (keyCodeNum !== 46 && keyCodeNum !== 8) {
+            if (e.target.value.length === 2) {
+              console.log("a");
+              e.target.value = e.target.value + "/";
+            }
+            // example: 11/23 bj bgd 11 bolgood butsagad too nemj bichhed forward slash auto nemeh hsg
+            if (e.target.value.length === 3 && re.test(e.target.value)) {
+              let lastChar = e.target.value.substr(e.target.value.length - 1);
+              expVal = e.target.value.substring(0, e.target.value.length - 1);
+              expVal = expVal + "/" + lastChar;
+              e.target.value = expVal;
+            }
+            //ending
+          }
+          expVal = e.target.value;
+        } else {
+          e.target.value = expVal;
+        }
+      } else {
+        e.target.value = expVal;
+      }
+    } else if (e.target.getAttribute("errid") === "cardError") {
+      //card number
+      //minus button mun eseh
+      if (keyCodeNum === 189 || keyCodeNum === 109) {
+        e.target.value = cardNumValue;
+      }
+      //backspace/delete/ button darj char ustgahad herwee tuhain char ni minus char buguud tuhain string-n gold bga bol ustgagdahgui bolgoh heseg start
+      if (keyCodeNum === 8) {
+        if (deletedValue === "-") {
+          if (e.target.value[e.target.selectionStart] !== undefined) {
+            e.target.value = cardNumValue;
+          }
+        }
+      }
+      //delete
+      if (keyCodeNum === 46) {
+        if (deletedValue === "-") {
+          if (e.target.value[e.target.selectionStart] !== undefined) {
+            e.target.value = cardNumValue;
+          }
+        }
+      }
+      //backspace/delete/ button darj char ustgahad herwee tuhain char ni minus char buguud tuhain string-n gold bga bol ustgagdahgui bolgoh heseg end
+
+      if (e.target.value === "" || re.test(e.target.value)) {
+        if (e.target.value.length <= 19) {
+          //картын дугаарыг copy хийж оруулсан тохиолдолд - тэмдэг нэмэх
+          if (e.target.value.length === 16 && reNotDash.test(e.target.value)) {
+            e.target.value = "";
+            for (let i = 0; i < arrayVal.length; i++) {
+              const element = arrayVal[i];
+              if (i === 4 || i === 8 || i === 12) {
+                e.target.value = e.target.value + "-";
+              }
+              e.target.value = e.target.value + element;
+            }
+          }
+          //automate-р input field-д - тэмдэг оруулах хэсэг
+          if (
+            e.target.value.length === 4 ||
+            e.target.value.length === 9 ||
+            e.target.value.length === 14
+          ) {
+            if (keyCodeNum !== 8 && keyCodeNum !== 46) {
+              e.target.value = e.target.value + "-";
+              arrayVal = e.target.value.split("");
+            }
+          }
+          if (
+            e.target.value.length === 5 ||
+            e.target.value.length === 10 ||
+            e.target.value.length === 15
+          ) {
+            //(1245-)->г (1245) болгоод шинээр тоо нэмэн бичихэд (-) автоматаар олгох
+            if (arrayVal[arrayVal.length - 1] !== "-") {
+              let lastVal = arrayVal[arrayVal.length - 1];
+              arrayVal[arrayVal.length - 1] = "-";
+              arrayVal[arrayVal.length] = lastVal;
+              cardNumValue = "";
+              arrayVal.forEach((element) => {
+                cardNumValue += element;
+              });
+              e.target.value = cardNumValue;
+            }
+          }
+          cardNumValue = e.target.value;
+        } else {
+          e.target.value = cardNumValue;
+        }
+      } else {
+        e.target.value = cardNumValue;
+      }
+    }
+    showHideErrMsg(e);
+  };
+
+  const showHideErrMsg = (e) => {
+    let oldstyle = e.target.style;
+    let errorID = e.target.getAttribute("errid");
+    if (e.target.value === "") {
+      e.target.style.borderBottom = "2.75px solid red";
+      document.getElementById(errorID).style.display = "block";
+    } else {
+      e.target.style = oldstyle;
+      document.getElementById(errorID).style.display = "none";
+    }
+  };
+
+  const openCameraEvent = (event) => {
+    let inputFile = document.getElementById("fileInputImg");
+    inputFile.click();
+  };
+
+  const imageSelected = (input) => {
+    if (input.target.files && input.target.files[0]) {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        let imgEl = document.getElementById("blah");
+        imgEl.setAttribute("src", e.target.result);
+        imgEl.style.width = "100%";
+        imgEl.style.height = "100%";
+        // $("#blah").attr("src", e.target.result).width(150).height(200);
+        imgEl.onload = function () {
+          let canvas = document.createElement("canvas");
+          canvas.width = imgEl.width;
+          canvas.height = imgEl.height;
+          canvas.getContext("2d").drawImage(imgEl, 0, 0);
+          // console.log(canvas.toDataURL("image/jpeg"));
+          let dataURL = canvas.toDataURL("image/jpeg");
+          let myJsonSting = {
+            imgData: dataURL,
+          };
+          axios
+            .post("http://192.168.8.48:5000/api/recognize", myJsonSting)
+            .then((response) => {
+              if (response.data.success) {
+                console.log(response.data.cardNumber);
+              } else {
+                console.log(response.data.error);
+              }
+            })
+            .catch((err) => {
+              setState({ open: true, vertical: "top", horizontal: "center" });
+              if (err.message === "Network Error") {
+                setErrPopUpMsg("Зураг таниулах явцад сүлжээний алдаа гарлаа.");
+              } else {
+                setErrPopUpMsg(err.message);
+              }
+            });
+          // doOCR(canvas.toDataURL("image/jpeg"));
+        };
+      };
+      reader.readAsDataURL(input.target.files[0]);
+    }
+  };
+
+  const hideCardDesc = () => {
+    setCardDesc({
+      show: false,
+      header: "",
+      body: "",
+    });
+  };
+
+  const infoClick = (info) => {
+    console.log(info);
+    switch (info) {
+      case "cardHolderIcon":
+        setCardDesc({
+          show: true,
+          header: "Карт эзэмшигчийн нэр",
+          body: messagesMn.cardHolderDesc + "&" + messagesMn.cardHolderDesc2,
+        });
+        return null;
+      case "expiryIcon":
+        setCardDesc({
+          show: true,
+          header: "Картын хүчинтэй хугацаа",
+          body: messagesMn.expiryDesc,
+        });
+        return null;
+      case "cvvIcon":
+        setCardDesc({
+          show: true,
+          header: "CVV код",
+          body: messagesMn.cvvDesc,
+        });
+        return null;
+    }
+  };
+
+  // const doOCR = (imageV) => {
+  //   const { createWorker, PSM } = require("tesseract.js");
+
+  //   const worker = createWorker();
+
+  //   (async () => {
+  //     await worker.load();
+  //     await worker.loadLanguage("eng");
+  //     await worker.initialize("eng");
+  //     await worker.setParameters({
+  //       tessedit_pageseg_mode: PSM.SINGLE_LINE,
+  //       tessedit_char_whitelist: "0123456789 ",
+  //     });
+  //     const {
+  //       data: { text },
+  //     } = await worker.recognize(imageV);
+  //     console.log(text);
+  //     await worker.terminate();
+  //   })();
+  // };
+
+  return (
+    <div>
+      {isCorrectReq ? (
+        <div>
+          {cardDesc.show ? (
+            <CardDescription
+              header={cardDesc.header}
+              body={cardDesc.body}
+              hideDesc={hideCardDesc}
+            ></CardDescription>
+          ) : null}
+          <Snackbar
+            anchorOrigin={{ vertical, horizontal }}
+            open={open}
+            autoHideDuration={6000}
+            onClose={handleClose}
+          >
+            <Alert
+              onClose={handleClose}
+              severity="error"
+              sx={{ width: "100%" }}
+            >
+              <span id="msgID">{errPopUpMsg}</span>
+            </Alert>
+          </Snackbar>
+          {isVideoClicked ? (
+            <VideoPopUp closeCam={closeCamera}></VideoPopUp>
+          ) : null}
+
+          <Dialog
+            open={openDia}
+            onClose={handleClosePop}
+            aria-labelledby="alert-dialog-title"
+            aria-describedby="alert-dialog-description"
+          >
+            <DialogTitle id="alert-dialog-title">
+              {messagesMn.tranWarningHeader}
+            </DialogTitle>
+            <DialogContent>
+              <DialogContentText id="alert-dialog-description">
+                Бид таны бүртгүүлсэн картын дугаарыг баталгаажуулахын тулд
+                <span style={{ fontWeight: 800 }}> 1₮</span>-ий гүйлгээ хийх
+                шаардлагатай. Та зөвшөөрч байна уу ?
+              </DialogContentText>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={handleClosePop}>{messagesMn.btnNo}</Button>
+              <Button onClick={orderClick} autoFocus>
+                {messagesMn.btnYes}
+              </Button>
+            </DialogActions>
+          </Dialog>
+          <div className="cardFormHolder">
+            <form
+              id="3DS_FORM"
+              action="https://192.168.223.4:9092/3dss/mpReq"
+              method="post"
+            ></form>
+            <div className="cardFormHeader">{Logo}</div>
+            <div className="cardFormBody">
+              <img
+                style={{ display: "none" }}
+                id="blah"
+                src=""
+                alt="your image"
+              />
+
+              <div className="cardGridHolder">
+                <div className="singleInputHolder">
+                  <div className="labels">{messagesMn.cardNum}</div>
+                  <div className="inputWithIcon">
+                    <input
+                      onInput={validateVal}
+                      onFocus={showHideErrMsg}
+                      errid="cardError"
+                      min="0"
+                      id="cardNum"
+                      onKeyDown={keyPress}
+                      className="cardInputs"
+                      placeholder={messagesMn.cardNumPlaceHolder}
+                      type="text"
+                    />
+                    <CameraIcon
+                      onClick={(e) => {
+                        openCameraEvent(e);
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: "none" }}>
+                    <input
+                      id="fileInputImg"
+                      type="file"
+                      name="image"
+                      accept="image/*"
+                      capture="environment"
+                    />
+                  </div>
+                  <span id="cardError" className="warningInfo">
+                    {messagesMn.cardNumErr}
+                  </span>
+                </div>
+
+                <div className="singleInputHolder">
+                  <div className="labels">{messagesMn.cardHolder}</div>
+                  <div className="inputWithIcon">
+                    <input
+                      onInput={validateVal}
+                      onFocus={showHideErrMsg}
+                      errid="cardHolderError"
+                      id="cardHolderName"
+                      className="cardInputs"
+                      placeholder={messagesMn.cardInputPlaceHolder}
+                      type="text"
+                    />
+                    <InfoIcon
+                      onClick={() => {
+                        infoClick("cardHolderIcon");
+                      }}
+                    />
+                  </div>
+
+                  <span id="cardHolderError" className="warningInfo">
+                    {messagesMn.cardHolderErr}
+                  </span>
+                </div>
+
+                <div className="expCvvContainer">
+                  <div>
+                    <div className="singleInputHolder">
+                      <div id="cvvLabels" className="labels">
+                        {messagesMn.cvv}
+                      </div>
+                      <div className="inputWithIcon">
+                        <input
+                          onInput={validateVal}
+                          onFocus={showHideErrMsg}
+                          errid="cvvError"
+                          min="0"
+                          id="cvv"
+                          className="cardInputs"
+                          placeholder={messagesMn.cvvPlaceHolder}
+                          type="text"
+                        />
+                        <InfoIcon
+                          onClick={() => {
+                            infoClick("cvvIcon");
+                          }}
+                        />
+                      </div>
+                      <span id="cvvError" className="warningInfo">
+                        {messagesMn.cvvErr}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="singleInputHolder">
+                      <div id="expiryLabels" className="labels">
+                        {messagesMn.expiry}
+                      </div>
+                      <div className="inputWithIcon">
+                        <input
+                          onKeyDown={keyPress}
+                          onInput={validateVal}
+                          onFocus={showHideErrMsg}
+                          errid="expiryError"
+                          min="0"
+                          id="expiryDate"
+                          className="cardInputs"
+                          placeholder="MM/YY"
+                          type="text"
+                        />
+                        <InfoIcon
+                          onClick={() => {
+                            infoClick("expiryIcon");
+                          }}
+                        />
+                      </div>
+                      <span id="expiryError" className="warningInfo">
+                        {messagesMn.expiryErr}
+                      </span>
+                    </div>
+                    {/* <div
+                      className="mmYYHolder"
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        width: "89%",
+                        paddingLeft: "10px",
+                        marginTop: "10px",
+                      }}
+                    ></div> */}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {props.whichcompany === "unitel" ? (<div className="aboveBtnContent">
+            <div><TrustIcon></TrustIcon>
+              <div>{messagesMn.tokiCommercial}</div></div>
+              <div className="btnHolder">
+                <Button
+                  variant="contained"
+                  className="orderButton"
+                  onClick={handleClickOpen}
+                >
+                  {messagesMn.btn}
+                </Button>
+              </div>
+            </div>) : (<div className="btnHolder">
+                <Button
+                  variant="contained"
+                  className="orderButton"
+                  onClick={handleClickOpen}
+                >
+                  {messagesMn.btn}
+                </Button>
+            </div>)}
+          </div>
+        </div>
+      ) : (
+        <Dialog
+          open={true}
+          aria-labelledby="alert-dialog-title"
+          aria-describedby="alert-dialog-description"
+        >
+          <DialogTitle id="alert-dialog-title">{"Invalid URL"}</DialogTitle>
+          <DialogContent>
+            <DialogContentText id="alert-dialog-description">
+              {wrongReqMsg}
+            </DialogContentText>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+};
+
+export default withRouter(Card);

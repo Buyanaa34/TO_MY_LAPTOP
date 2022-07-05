@@ -1,0 +1,83 @@
+server:
+  port: 8888
+
+spring:
+  application:
+    name: ConfigServer
+  cloud:
+    config:
+      server:
+        git:
+          uri: git@git.golomtbank.local:phh/obi/config-server.git
+          clone-on-start: true
+          ignore-local-ssh-settings: true
+          strict-host-key-checking: false
+          private-key: |
+            -----BEGIN RSA PRIVATE KEY-----
+            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
+            -----END RSA PRIVATE KEY-----
+          default-label: master
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    hostname: localhost
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+  endpoint:
+    health:
+      show-details: always

@@ -1,1 +1,227 @@
 
+package com.golomt.gateway.GMTFilter;
+
+import com.golomt.gateway.GMTConfig.Config;
+import com.golomt.gateway.GMTConstants.GMTLog;
+import com.golomt.gateway.GMTUtility.GMTCacheUtilities;
+import com.golomt.gateway.GMTUtility.GMTEncrypt;
+import com.golomt.gateway.GMTUtility.GMTLogUtilities;
+import com.golomt.gateway.GMTUtility.JWTUtility;
+import org.apache.http.entity.ContentType;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cloud.gateway.filter.GatewayFilter;
+import org.springframework.cloud.gateway.filter.OrderedGatewayFilter;
+import org.springframework.cloud.gateway.filter.factory.AbstractGatewayFilterFactory;
+import org.springframework.cloud.gateway.filter.factory.rewrite.ModifyRequestBodyGatewayFilterFactory;
+import org.springframework.context.ApplicationContext;
+import org.springframework.core.env.Environment;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.data.redis.connection.jedis.JedisConnectionFactory;
+import org.springframework.data.redis.support.atomic.RedisAtomicLong;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.stereotype.Component;
+import org.springframework.web.server.ServerWebExchange;
+import org.springframework.web.util.UriComponentsBuilder;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
+import java.util.regex.Pattern;
+
+/**
+ * RequestFilter
+ *
+ * @author 26b712984 Munkhbayasgalan P.
+ * @created 7/19/2022
+ **/
+
+@Component
+public class RequestFilter extends AbstractGatewayFilterFactory<Config> {
+
+    @Autowired
+    private JWTUtility jwtUtility;
+
+    @Autowired
+    private GMTEncrypt encrypt;
+
+    @Autowired
+    ApplicationContext applicationContext;
+
+    @Autowired
+    Environment env;
+
+    public RequestFilter() {
+        super(Config.class);
+    }
+
+    private static Logger log = LoggerFactory.getLogger(String.class);
+
+    @Override
+    public GatewayFilter apply(Config config) {
+        return new OrderedGatewayFilter((exchange, chain) -> {
+            ServerHttpRequest request = exchange.getRequest();
+
+            try {
+                String contentType = request.getHeaders().getFirst(HttpHeaders.CONTENT_TYPE);
+                String custCode = getCustomerCode(exchange.getRequest());
+                String tokenString = getTokenString(exchange.getRequest());
+
+                if (HttpMethod.POST.name().equalsIgnoreCase(request.getMethodValue())) {
+                    if (null != contentType && contentType.startsWith(MediaType.APPLICATION_JSON_VALUE)) {
+                        ModifyRequestBodyGatewayFilterFactory.Config modifyRequestConfig = new ModifyRequestBodyGatewayFilterFactory.Config().setContentType(ContentType.APPLICATION_JSON.getMimeType()).setRewriteFunction(String.class, String.class, (exchange1, originalRequestBody) -> {
+                            try {
+                                JSONObject jsonObject = new JSONObject(originalRequestBody);
+                                GMTLogUtilities.info(GMTLog.ZUUL.value(), "[Request][POST][" + custCode + "][" + request.getPath().value() + "][" + writeRequestToLog(jsonObject) + "][" + tokenString + "]");
+                            } catch (Exception ex) {
+                                ex.printStackTrace();
+                            }
+                            return Mono.just(originalRequestBody);
+                        });
+
+                        return new ModifyRequestBodyGatewayFilterFactory().apply(modifyRequestConfig).filter(exchange, chain);
+                    }
+                } else {
+                    GMTLogUtilities.info(GMTLog.ZUUL.value(), "[Request][GET]" + custCode + "[][" + tokenString + "]");
+                }
+            } catch (Exception e) {
+                GMTLogUtilities.fatal(GMTLog.ZUUL.value(), "[Request][Exception]" + getCustomerCode(exchange.getRequest()) + "[][" + getTokenString(exchange.getRequest()) + "]", e);
+            }
+
+
+            if (request.getURI().getPath().contains("api/pfm") && !request.getURI().getPath().contains("api/pfm/airflow")) {
+                exchange = exchange.mutate().request(exchange.getRequest().mutate().uri(UriComponentsBuilder.fromUri(exchange.getRequest().getURI()).queryParams(request.getQueryParams()).queryParam("cif", encrypt.getDecryptionAES(jwtUtility.getCIF(jwtUtility.resolveToken(request)))).queryParam("user_code", encrypt.getDecryptionAES(jwtUtility.getUserId(jwtUtility.resolveToken(request)))).build(true).toUri()).header("Authorization", "Token " + GMTCacheUtilities.PFM_TOKEN).build()).build();
+
+                System.out.println("PMF_QUERY_PARAMS: " + exchange.getRequest().getURI().getPath() + "|" + exchange.getRequest().getQueryParams().toString());
+            }
+
+            if (request.getURI().getPath().contains("api/dmf")) {
+                exchange = exchange.mutate().request(exchange.getRequest().mutate().uri(UriComponentsBuilder.fromUri(exchange.getRequest().getURI()).queryParams(request.getQueryParams()).queryParam("cust_code", encrypt.getDecryptionAES(jwtUtility.getCIF(jwtUtility.resolveToken(request)))).queryParam("user_code", encrypt.getDecryptionAES(jwtUtility.getUserId(jwtUtility.resolveToken(request)))).build(true).toUri()).header("Authorization", "Token " + GMTCacheUtilities.DMF_TOKEN).build()).build();
+
+                System.out.println("DMF_QUERY_PARAMS: " + exchange.getRequest().getURI().getPath() + "|" + exchange.getRequest().getQueryParams().toString());
+            }
+
+            if (request.getURI().getPath().startsWith("/api/admin/") && !request.getURI().getPath().startsWith("/api/admin/banner") && !request.getURI().getPath().startsWith("/api/admin/faq") && !request.getURI().getPath().startsWith("/api/admin/manual") && !request.getURI().getPath().startsWith("/api/admin/uploads") && !request.getURI().getPath().startsWith("/api/admin/contract") && !request.getURI().getPath().startsWith("/api/admin/translation") && !request.getURI().getPath().startsWith("/api/admin/popup/active") && !request.getURI().getPath().startsWith("/api/admin/constant")) {
+                String token = jwtUtility.resolveToken(request);
+
+                if (token == null) {
+                    getResponse(HttpStatus.UNAUTHORIZED, "Client could not be authenticated", exchange);
+                }
+
+                try {
+                    if (encrypt.getDecryptionAES(jwtUtility.getUsername(jwtUtility.resolveToken(request))) == null) {
+                        getResponse(HttpStatus.UNAUTHORIZED, "Bearer token is invalid", exchange);
+                    }
+                } catch (Exception ex) {
+                    getResponse(HttpStatus.UNAUTHORIZED, "Bearer token can not be generated", exchange);
+                }
+            }
+
+            if (env.getActiveProfiles()[0].equals("prod") && request.getURI().getPath().contains("actuator") && !request.getRemoteAddress().getHostString().equals("192.168.208.40")) {
+                getResponse(HttpStatus.NOT_FOUND, "404 not found", exchange);
+            }
+
+            if (request.getURI().getPath().contains("api")) {
+                log.info(String.format("%s request to %s %s", request.getMethod(), request.getURI().getPath(), request.getRemoteAddress().getHostString()));
+
+                GMTCacheUtilities.PATHS.put(request.getURI().getPath(), request.getMethod().name());
+                new RedisAtomicLong(request.getMethod() + "_" + request.getURI().getPath(), (JedisConnectionFactory) applicationContext.getBean("jedisConnectionFactory")).incrementAndGet();
+            }
+
+            exchange.getResponse().getHeaders().add("Content-Security-Policy", "frame-src 'self' 'unsafe-inline' https://www.youtube.com https://widgets.golomtbank.   /messenger https://www.google.com/ blob: data: filesystem:; object-src 'self' blob: filesystem: data:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; default-src *; img-src 'self' data: *; script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com https://maps.googleapis.com https://www.youtube.com https://widgets.golomtbank.com; report-uri https://glmt.report-uri.com/r/d/csp/enforce");
+
+            try {
+                if (env.getProperty("spring.profiles.active").equalsIgnoreCase("dev"))
+                    exchange.getResponse().getHeaders().add("X-Frame-Options", "ALLOW-FROM https://www.golomtbank.com https://egolomt.mn https://eglmt.golomtbank.com http://ebankuat.golomtbank.local");
+                else if (env.getProperty("spring.profiles.active").equalsIgnoreCase("dr"))
+                    exchange.getResponse().getHeaders().add("X-Frame-Options", "ALLOW-FROM https://www.golomtbank.com https://egolomt.mn https://eglmt.golomtbank.com http://ebank-dr.golomtbank.local:8050");
+                else
+                    exchange.getResponse().getHeaders().add("X-Frame-Options", "ALLOW-FROM https://www.golomtbank.com https://egolomt.mn https://eglmt.golomtbank.com");
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+
+
+            exchange.getResponse().getHeaders().add("Referrer-Policy", "no-referrer-when-downgrade");
+            exchange.getResponse().getHeaders().add("Strict-Transport-Security", "max-age=2592000");
+            exchange.getResponse().getHeaders().add("X-Content-Type-Options", "nosniff");
+            exchange.getResponse().getHeaders().add("X-XSS-Protection", "1; mode=block");
+
+            return chain.filter(exchange.mutate().request(exchange.getRequest()).response(exchange.getResponse()).build());
+
+        }, 1);
+    }
+
+
+    private String getCustomerCode(ServerHttpRequest request) {
+        try {
+            if (jwtUtility.resolveToken(request) != null) {
+                String username = jwtUtility.getUsername(jwtUtility.resolveToken(request));
+                if (username != null) {
+                    return encrypt.getDecryptionAES(username);
+                }
+            }
+        } catch (Exception ex) {
+
+        }
+
+        return "";
+    }
+
+    private String getTokenString(ServerHttpRequest request) {
+        if (jwtUtility.resolveToken(request) != null) return jwtUtility.resolveToken(request);
+
+        return "";
+    }
+
+    private String writeRequestToLog(JSONObject requestJson) {
+        JSONObject body = null;
+        try {
+            if (requestJson != null && requestJson.has("body")) {
+                body = requestJson.getJSONObject("body");
+
+                Iterator<String> keys = body.keys();
+
+                while (keys.hasNext()) {
+                    String key = keys.next();
+
+                    if (body.get(key) != null) {
+                        if (key.toLowerCase().contains("pwd") || key.toLowerCase().contains("password") || key.toLowerCase().contains("pass")) {
+                            body.put(key, "*********");
+                        }
+                    }
+                }
+            }
+        } catch (JSONException e) {
+            e.printStackTrace();
+        } finally {
+            if (requestJson != null && body != null) requestJson.put("body", body);
+        }
+
+        return requestJson != null ? maskCardNumber(requestJson) : "";
+    }
+
+
+    private Mono<Void> getResponse(HttpStatus status, String message, ServerWebExchange exchange) {
+        exchange.getResponse().setStatusCode(status);
+        exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
+
+        byte[] bytes = message.getBytes(StandardCharsets.UTF_8);
+        DataBuffer buffer = exchange.getResponse().bufferFactory().wrap(bytes);
+        return exchange.getResponse().writeWith(Flux.just(buffer));
+    }
+
+    public String maskCardNumber(JSONObject object) {
+        Pattern p = Pattern.compile("(?<=\"\\d{4})\\d{7,8}(?=\\d{4}\")",
+                Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+        return p.matcher(object.toString()).replaceAll("********");
+    }
+}

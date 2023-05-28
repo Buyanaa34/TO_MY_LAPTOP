@@ -1,1 +1,154 @@
 
+eureka:
+  client:
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: http://egolomt.golomtbank.local:8761/eureka/
+  instance:
+    health-check-url-path: /actuator/health
+    lease-expiration-duration-in-seconds: 10
+    lease-renewal-interval-in-seconds: 5
+management:
+  server:
+    port: -1
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+server:
+  ssl:
+    enabled: true
+    key-store: ssl/prod.jks
+    key-password: 1q2w3e=
+
+spring:
+  boot:
+    admin:
+      client:
+        api-path: instances
+        url: http://pre-egolomt.golomtbank.local:8040
+  datasource:
+    driver-class-name: oracle.jdbc.OracleDriver
+    password: xeflNT4hSr!Vdx
+    url: jdbc:oracle:thin:@192.168.208.151:1521/dcilog
+    username: dcilog
+  jackson:
+    date-format: yyyy-MM-dd hh:mm:ss
+  jpa:
+    database-platform: org.hibernate.dialect.Oracle9Dialect
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        id:
+          new_generator_mappings: true
+    show-sql: false
+  cloud:
+    loadbalancer:
+      retry:
+        enabled: true
+    gateway:
+      actuator:
+        verbose:
+          enabled: true
+      routes:
+        - id: Account
+          uri: lb://Account
+          predicates:
+            - Path=/api/account/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/account(?<segment>/?.*), /$\{segment}
+        - id: Admin
+          uri: http://egolomt.golomtbank.local:8093
+          predicates:
+            - Path=/api/admin/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/admin(?<segment>/?.*), /$\{segment}
+        - id: Auth
+          uri: lb://auth
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/auth(?<segment>/?.*), /$\{segment}
+        - id: Card
+          uri: lb://card
+          predicates:
+            - Path=/api/card/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/card(?<segment>/?.*), /$\{segment}
+        - id: Dmf
+          uri: https://merchant-platform.golomtbank.local
+          predicates:
+            - Path=/api/dmf/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/dmf(?<segment>/?.*), /$\{segment}
+        - id: Location
+          uri: http://egolomt.golomtbank.local:8088
+          predicates:
+            - Path=/api/location/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/location(?<segment>/?.*), /$\{segment}
+        - id: Offline-request
+          uri: lb://offline-request
+          predicates:
+            - Path=/api/offline-request/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/offline-request(?<segment>/?.*), /$\{segment}
+        - id: Payment
+          uri: lb://payment
+          predicates:
+            - Path=/api/payment/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/payment(?<segment>/?.*), /$\{segment}
+        - id: Loan
+          uri: lb://loan
+          predicates:
+            - Path=/api/loan/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/loan(?<segment>/?.*), /$\{segment}
+        - id: Pfm
+          uri: https://pfm.golomtbank.local
+          predicates:
+            - Path=/api/pfm/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/pfm(?<segment>/?.*), /$\{segment}
+        - id: Transaction
+          uri: lb://transaction
+          predicates:
+            - Path=/api/transaction/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/transaction(?<segment>/?.*), /$\{segment}
+        - id: Utility
+          uri: lb://utility
+          predicates:
+            - Path=/api/utility/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/utility(?<segment>/?.*), /$\{segment}
+        - id: Web
+          uri: http://localhost:8008
+          predicates:
+            - Path=/**
+          filters:
+            - RequestFilter
+            - RewritePath=/api/web(?<segment>/?.*), /$\{segment}
+      discovery:
+        locator:
+          enabled: true

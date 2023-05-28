@@ -1,0 +1,14 @@
+package com.golomt.gateway.GMTConfig;
+
+import org.springframework.context.annotation.PropertySource;
+import org.springframework.context.annotation.PropertySources;
+import org.springframework.stereotype.Component;
+
+@Component
+@PropertySources({
+        @PropertySource("classpath:key-${spring.profiles.active}.properties"),
+        @PropertySource("classpath:url-${spring.profiles.active}.properties"),
+        @PropertySource("classpath:user-${spring.profiles.active}.properties")
+})
+public class PropertiesConfig {
+}

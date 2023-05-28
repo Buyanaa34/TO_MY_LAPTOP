@@ -1,0 +1,15 @@
+package com.golomt.gateway.GMTConfig;
+
+/**
+ * Config
+ *
+ * @author 26b712984 Munkhbayasgalan P.
+ * @created 7/19/2022
+ **/
+
+
+public class Config {
+    public Config() {
+
+    }
+}
